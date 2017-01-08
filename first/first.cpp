@@ -7,7 +7,7 @@
 #include <istream>
 #include <iostream>
 #include <iterator>
-#pragma comment(lib,"x86/OpenCL.lib")
+#pragma comment(lib,"OpenCL.lib")
 
 char *Read(const char * path) {
 	FILE * fp = NULL;

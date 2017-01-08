@@ -142,8 +142,8 @@ int vboProcess(cl_context context, cl_device_id device, GLuint vbo) {
 
 	cl_queue_properties properties = 0;
 	cl_command_queue_properties prop = 0;
-	cl_command_queue queue = clCreateCommandQueue(context, device, prop ,&err);
-	//cl_command_queue queue = clCreateCommandQueueWithProperties(context, device, &properties, &err);
+	//cl_command_queue queue = clCreateCommandQueue(context, device, prop ,&err);
+	cl_command_queue queue = clCreateCommandQueueWithProperties(context, device, &properties, &err);
 	if (queue != NULL) {
 		err = clEnqueueAcquireGLObjects(queue, 1, &cl_vbo_mem, 0, NULL, NULL);
 		err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, tex_globalWorkSize, tex_localWorkSize, 0, NULL, NULL);
