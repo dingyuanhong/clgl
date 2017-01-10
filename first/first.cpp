@@ -1,68 +1,15 @@
+//用于GPU使用QUEUE
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #include "CL\opencl.h"
-#include <vector>
-#include <stdlib.h>
-#include <stdio.h>
-#include<string>
-#include <fstream>
-#include <istream>
-#include <iostream>
-#include <iterator>
+#include "clProgramInfo.h"
+#include "clPlatformInfo.h"
+#include "clDeviceInfo.h"
+
 #pragma comment(lib,"OpenCL.lib")
 
-char *Read(const char * path) {
-	FILE * fp = NULL;
-	fopen_s(&fp,path,"rb");
-	if (fp == NULL) return NULL;
-	fseek(fp,0,SEEK_END);
-	long size = ftell(fp);
-	fseek(fp,0,SEEK_SET);
-	void *buf = malloc(size + 2);
-	if (buf == NULL) return NULL;
-	memset(buf,0,size+2);
+#include <vector>
 
-	fread(buf,1,size,fp);
-	fclose(fp);
-
-	return (char*)buf;
-}
-
-cl_program CreateProgram(cl_context context,const char * file) {
-	char * Source = Read(file);
-	if (Source == NULL) return NULL;
-
-	//std::fstream fileOpen("./Kernal1.cl");
-	//std::string programString(std::istreambuf_iterator<char>(fileOpen), (std::istreambuf_iterator<char>()));
-	//const char *programCodeSource = programString.c_str();
-
-	cl_program program = clCreateProgramWithSource(context, 1, (const char **)&Source, NULL, NULL);
-	if (program == NULL) return program;
-	cl_int err = clBuildProgram(program, 0, 0, NULL, NULL, NULL);
-	//cl_int err = clBuildProgram(program,1, &IDs[0],NULL,NULL,NULL);
-
-	free(Source);
-
-	if (err < 0) {
-		size_t len = 0;
-		clGetProgramBuildInfo(program, NULL, CL_PROGRAM_BUILD_LOG, 0, NULL, &len);
-		if (len > 0) {
-			char *buffer = (char*)malloc(len);
-			clGetProgramBuildInfo(program, NULL, CL_PROGRAM_BUILD_LOG, len, buffer, &len);
-			if (len > 0) {
-				printf("BuildProgram:Error:%s\n", buffer);
-			}
-		}
-		else {
-			printf("BuildProgram:Error:%d\n", err);
-		}
-
-		clReleaseProgram(program);
-		return NULL;
-	}
-	
-	return program;
-}
-
-int Process(cl_context context, std::vector<cl_device_id> IDs) {
+int Process(cl_context context, cl_device_id id) {
 	cl_program program = CreateProgram(context, "./Kernal1.cl");
 	if (program == NULL) return -1;
 
@@ -87,7 +34,13 @@ int Process(cl_context context, std::vector<cl_device_id> IDs) {
 
 	cl_queue_properties properties = 0;
 	//创建执行队列
-	cl_command_queue cqueue = clCreateCommandQueueWithProperties(context, IDs[0], &properties, &err);
+	cl_command_queue cqueue = clCreateCommandQueueWithProperties(context, id, &properties, &err);
+	if (err == CL_INVALID_DEVICE) {
+		//http://stackoverflow.com/questions/37016928/clcreatecontext-succeeds-but-clcreatecommandqueue-fails-with-33
+
+		cl_command_queue_properties prop = 0;
+		cqueue = clCreateCommandQueue(context, id, prop, &err);
+	}
 	if (cqueue != NULL) {
 		//执行核
 		cl_uint work_dims = 2;
@@ -108,81 +61,74 @@ int Process(cl_context context, std::vector<cl_device_id> IDs) {
 
 	clReleaseProgram(program);
 
-	return 0;
+	if (err > 0) return 0;
+	return err;
 }
 
-int main() {
-	cl_uint num = 0;
-	cl_int err = clGetPlatformIDs(0,0,&num);
-	if (err < 0) {
-		return -1;
-	}
-	std::vector<cl_platform_id> platforms(num);
-	err = clGetPlatformIDs(num,&platforms[0],&num);
-	if (err < 0) {
-		return -1;
-	}
+#include "glVersion.h"
+#include "gl\glut.h"
 
-	printf("PlatformIDs:%d \n",num);
+#pragma comment(lib,"Opengl32.lib")
+#pragma comment(lib,"glu32.lib")
+#pragma comment(lib,"glew32.lib")
+#pragma comment(lib,"glut32.lib")
 
-	cl_context context = NULL;
-	cl_device_id id = NULL;
-	std::vector<cl_device_id> deviceIDs;
+void glInitWindow() {
+	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+	glutInitWindowPosition(100, 100);
+	glutInitWindowSize(640, 480);
+	glutCreateWindow("测试");
+	glewInit();
+	glVersion();
+}
 
-	for (cl_int i = 0; i < num; i++) {
+int main(int argc, char **argv) {
+	glutInit(&argc, argv);
+	glInitWindow();
+
+	std::vector<cl_platform_id> platforms = GetPlatformIDs();
+	printf("PlatformIDs:%d \n", platforms.size());
+
+	std::vector<cl_platform_device_info> infos;
+	for (cl_int i = 0; i < platforms.size(); i++) {
 		printf("%s %d:\n", "PLATFORM",i);
-		char buf[1024] = { 0 };
-		size_t size = 0;
-		err = clGetPlatformInfo(platforms[i], CL_PLATFORM_PROFILE,1024, buf,&size);
-		if (err < 0) continue;
-		printf("	PROFILE:%s\n",buf);
-		err = clGetPlatformInfo(platforms[i], CL_PLATFORM_VERSION, 1024, buf, &size);
-		if (err < 0) continue;
-		printf("	VERSION:%s\n", buf);
-		err = clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, 1024, buf, &size);
-		if (err < 0) continue;
-		printf("	NAME:%s\n", buf);
-		err = clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, 1024, buf, &size);
-		if (err < 0) continue;
-		printf("	VENDOR:%s\n", buf);
-		err = clGetPlatformInfo(platforms[i], CL_PLATFORM_EXTENSIONS, 1024, buf, &size);
-		if (err < 0) continue;
-		printf("	EXTENSIONS:%s\n", buf);
-		err = clGetPlatformInfo(platforms[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, 1024, buf, &size);
-		if (err < 0) continue;
-		printf("	TIMER:%s\n", buf);
+		printPlatformInfo(platforms[i]);
 
-		cl_uint deviceNum = 0;
-		err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,0,NULL,&deviceNum);
-		if (err < 0) continue;
+		std::vector<cl_device_id> deviceIDs = GetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL);
+		printf("Devices:%d\n", deviceIDs.size());
 
-		std::vector<cl_device_id> devices(deviceNum);
-		err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, deviceNum, &devices[0], &deviceNum);
-		if (err < 0) continue;
+		for (cl_int j = 0; j < deviceIDs.size(); j++) {
+			printf("ID:%d\n",j);
+			printDeviceInfo(deviceIDs[j]);
 
-		printf("	  Devices:%d\n",deviceNum);
-		char deviceBuf[1024] = { 0 };
-		size_t deviceSize = 0;
-		for (cl_int j = 0; j < deviceNum; j++) {
-			err = clGetDeviceInfo(devices[j], CL_DEVICE_TYPE, 1024, deviceBuf, &deviceSize);
-			if (err < 0) continue;
-			printf("		TYPE:%s\n", deviceBuf);
-			err = clGetDeviceInfo(devices[j], CL_DEVICE_NAME,1024, deviceBuf,&deviceSize);
-			if (err < 0) continue;
-			printf("		NAME:%s\n",deviceBuf);
+			cl_platform_device_info info = { 0 };
+			info.platform = platforms[i];
+			info.device = deviceIDs[j];
+			infos.push_back(info);
+		}
+	}
 
-			if (context == NULL) {
-				cl_context_properties prop[] = { CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platforms[i]), 0 };
-				context = clCreateContextFromType(prop, CL_DEVICE_TYPE_ALL, NULL, NULL, &err);
-				deviceIDs = devices;
+	if (infos.size() > 0) {
+		int index = 2;
+		int err = 0;
+		cl_context_properties prop[] = { CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(infos[index].platform), 0 };
+		cl_context context = clCreateContextFromType(prop, CL_DEVICE_TYPE_ALL, NULL, NULL, &err);
+
+		if (context != NULL) {
+			printf("Context:\n");
+			printContextInfo(context);
+			err = Process(context, infos[index].device);
+			clReleaseContext(context);
+
+			if (err >= 0) {
+				printf("执行成功.\n");
+			}
+			else {
+				printf("执行失败.(%d)\n",err);
 			}
 		}
 	}
-	
-	if (context != NULL) {
-		Process(context, deviceIDs);
-		clReleaseContext(context);
-	}
 
+	getchar();
 	return 0;
 }

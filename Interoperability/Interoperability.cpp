@@ -8,96 +8,155 @@
 #include <iostream>
 #include <istream>
 
-#include "cl\opencl.h"
-#include "gl\glew.h"
-#include "gl\gl.h"
-#include "gl\glu.h"
+#include "glVersion.h"
 #include "gl\glut.h"
-
-#pragma comment(lib,"OpenCL.lib")
 #pragma comment(lib,"Opengl32.lib")
 #pragma comment(lib,"glu32.lib")
 #pragma comment(lib,"glew32.lib")
 #pragma comment(lib,"glut32.lib")
 
-char *Read(const char * path) {
-	FILE * fp = NULL;
-	fopen_s(&fp, path, "rb");
-	if (fp == NULL) return NULL;
-	fseek(fp, 0, SEEK_END);
-	long size = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
-	void *buf = malloc(size + 2);
-	if (buf == NULL) return NULL;
-	memset(buf, 0, size + 2);
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 
-	fread(buf, 1, size, fp);
-	fclose(fp);
+#include "clPlatformInfo.h"
+#include "clDeviceInfo.h"
+#include "clProgramInfo.h"
+#include "clContextInfo.h"
+#pragma comment(lib,"OpenCL.lib")
 
-	return (char*)buf;
-}
+cl_context CreateContext(cl_device_type type) {
+	std::vector<cl_platform_id> platforms = GetPlatformIDs();
 
-cl_program CreateProgram(cl_context context, const char * file) {
-	char * Source = Read(file);
-	if (Source == NULL) return NULL;
+	printf("PlatformIDs:%d \n", platforms.size());
 
-	cl_program program = clCreateProgramWithSource(context, 1, (const char **)&Source, NULL, NULL);
-	if (program == NULL) return program;
-	cl_int err = clBuildProgram(program, 0, 0, NULL, NULL, NULL);
+	cl_context context = NULL;
+	cl_platform_device_info info = { 0 };
 
-	free(Source);
+	for (cl_int i = 0; i < platforms.size(); i++) {
+		char buf[1024] = { 0 };
+		size_t size = 0;
+		int err = clGetPlatformInfo(platforms[i], CL_PLATFORM_EXTENSIONS, 1024, buf, &size);
+		if (err < 0) continue;
 
-	if (err < 0) {
-		size_t len = 0;
-		clGetProgramBuildInfo(program, NULL, CL_PROGRAM_BUILD_LOG, 0, NULL, &len);
-		if (len > 0) {
-			char *buffer = (char*)malloc(len);
-			clGetProgramBuildInfo(program, NULL, CL_PROGRAM_BUILD_LOG, len, buffer, &len);
-			if (len > 0) {
-				printf("BuildProgram:Error:%s\n", buffer);
+		if (strstr(buf, "cl_khr_gl_sharing") == NULL) {
+			continue;
+		}
+
+		std::vector<cl_device_id> devices = GetDeviceIDs(platforms[i], type /*CL_DEVICE_TYPE_GPU*/);
+		for (cl_int j = 0; j < devices.size(); j++) {
+			if (context == NULL) {
+				//cl_context_properties props[] = { CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platforms[i]), 0 };
+				//context = clCreateContext(props, CL_DEVICE_TYPE_ALL, NULL, NULL, NULL, &err);
+
+				cl_context_properties * props = GetGLContextProperties(platforms[i]);
+				info.platform = platforms[i];
+				info.device = devices[j];
+				context = clCreateContext(props, 1, &info.device, NULL, NULL, &err);
 			}
 		}
-		else {
-			printf("BuildProgram:Error:%d\n", err);
-		}
+	}
 
-		clReleaseProgram(program);
+	return context;
+}
+
+typedef struct TaskArgs {
+	cl_program program;
+	cl_kernel kernel;
+	cl_command_queue queue;
+	cl_mem vbo_mem;
+}TaskArgs;
+
+TaskArgs *initTask(cl_context context, GLuint vbo,int w,int h,int seq) {
+	int err = 0;
+	cl_mem vbo_mem = clCreateFromGLBuffer(context, CL_MEM_READ_WRITE, vbo, &err);
+
+	cl_program program = CreateProgram(context, "./vboKernel.cl");
+	if (program == NULL) {
+		clReleaseMemObject(vbo_mem);
 		return NULL;
 	}
 
-	return program;
+	cl_kernel kernel = clCreateKernel(program, "init_vbo_kernel", &err);
+
+	char buffer[1024] = { 0 };
+	size_t size = 0;
+	err = clGetContextInfo(context, CL_CONTEXT_DEVICES, 1024, &buffer[0], &size);
+	cl_device_id device = *(cl_device_id*)buffer;
+	err = clGetDeviceInfo(device,CL_DEVICE_OPENCL_C_VERSION,1024, &buffer[0], &size);
+
+	//printDeviceInfo(device);
+
+	cl_queue_properties properties = CL_QUEUE_ON_DEVICE | CL_QUEUE_PROFILING_ENABLE;
+	cl_command_queue queue = clCreateCommandQueueWithProperties(context, device, &properties, &err);
+	if (err == CL_INVALID_DEVICE) {
+		cl_command_queue_properties prop = 0;
+		queue = clCreateCommandQueue(context,device,prop,&err);
+	}
+	if (err != 0) {
+		printf("Error:clCreateCommandQueueWithProperties:%d\n",err);
+	}
+
+	TaskArgs *args = (TaskArgs*)malloc(sizeof(TaskArgs));
+	args->program = program;
+	args->kernel = kernel;
+	args->queue = queue;
+	args->vbo_mem = vbo_mem;
+	return args;
 }
 
-cl_context_properties * GetGLContextProperties(cl_platform_id platform) {
-	// Create the properties for this context.
-	static cl_context_properties lContextProperties[] = {
-		// We need to add information about the OpenGL context with
-		// which we want to exchange information with the OpenCL context.
-#if defined (WIN32)
-		// We should first check for cl_khr_gl_sharing extension.
-		CL_GL_CONTEXT_KHR , (cl_context_properties) wglGetCurrentContext() ,
-		CL_WGL_HDC_KHR , (cl_context_properties) wglGetCurrentDC() ,
-#elif defined (__linux__)
-		// We should first check for cl_khr_gl_sharing extension.
-		CL_GL_CONTEXT_KHR , (cl_context_properties)glXGetCurrentContext() ,
-		CL_GLX_DISPLAY_KHR , (cl_context_properties)glXGetCurrentDisplay() ,
-#elif defined (__APPLE__)
-		// We should first check for cl_APPLE_gl_sharing extension.
-#if 0
-		// This doesn't work.
-		CL_GL_CONTEXT_KHR , (cl_context_properties)CGLGetCurrentContext() ,
-		CL_CGL_SHAREGROUP_KHR , (cl_context_properties)CGLGetShareGroup(CGLGetCurrentContext()) ,
-#else
-		CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE , (cl_context_properties)CGLGetShareGroup(CGLGetCurrentContext()) ,
-#endif
-#endif
-		CL_CONTEXT_PLATFORM , (cl_context_properties)platform ,
-		0 , 0 ,
-	};
+void uninitTask(TaskArgs *args) {
+	if (args->queue != NULL) {
+		clFinish(args->queue);
+		clReleaseCommandQueue(args->queue);
+		args->queue = NULL;
+	}
+	if (args->kernel != NULL) {
+		clReleaseKernel(args->kernel);
+		args->kernel = NULL;
+	}
+	if (args->program != NULL) {
+		clReleaseProgram(args->program);
+		args->program = NULL;
+	}
+	if (args->vbo_mem != NULL) {
+		clReleaseMemObject(args->vbo_mem);
+		args->vbo_mem = NULL;
+	}
+}
 
-	lContextProperties[5] = (cl_context_properties)platform;
+int vboProcess(TaskArgs *args,int w,int h, int seq) {
+	if(args->queue != NULL){
+		clSetKernelArg(args->kernel, 0, sizeof(cl_mem), &args->vbo_mem);
+		clSetKernelArg(args->kernel, 1, sizeof(cl_int), &w);
+		clSetKernelArg(args->kernel, 2, sizeof(cl_int), &h);
+		clSetKernelArg(args->kernel, 3, sizeof(cl_int), &seq);
 
-	return lContextProperties;
+		/*size_t tex_globalWorkSize[] = { (size_t)w*h };
+		size_t tex_localWorkSize[] = { 0 };*/
+
+		size_t tex_globalWorkSize[2] = { w, h };
+		size_t tex_localWorkSize[2] = { 32, 4 };
+
+		int err = clEnqueueAcquireGLObjects(args->queue, 1, &args->vbo_mem, 0, NULL, NULL);
+		err = clEnqueueNDRangeKernel(args->queue, args->kernel, 1, NULL, tex_globalWorkSize, tex_localWorkSize, 0, NULL, NULL);
+		err = clEnqueueReleaseGLObjects(args->queue, 1, &args->vbo_mem, 0, NULL, NULL);
+		//clFinish(args->queue);
+
+		return err;
+	}
+	else {
+		return -1;
+	}
+}
+
+void vboProcess(GLuint vbo) {
+	cl_context context = CreateContext(CL_DEVICE_TYPE_GPU);
+	TaskArgs *args = initTask(context, vbo, 640, 480, 0);
+	glFinish();
+	vboProcess(args, 640, 480, 0);
+	if (args != NULL) {
+		uninitTask(args);
+		free(args);
+	}
 }
 
 GLuint initVBO(int vbolen) {
@@ -105,169 +164,59 @@ GLuint initVBO(int vbolen) {
 	GLuint vbo_buffer;
 	glGenBuffers(1, &vbo_buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_buffer);
-	glBufferData(GL_ARRAY_BUFFER, vbolen*sizeof(float) * 4, NULL, GL_STREAM_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, vbolen*sizeof(float), NULL, GL_STREAM_DRAW);
 	glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &bsize);
-	if ((GLuint)bsize != (vbolen*sizeof(float) * 4)) {
+	if ((GLuint)bsize != (vbolen*sizeof(float))) {
 		printf("vbo Buffer size is error(%d)(%d).\n", vbo_buffer, bsize);
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	return vbo_buffer;
 }
 
-int vboProcess(cl_context context, cl_device_id device, GLuint vbo) {
-	int err = 0;
-	cl_mem cl_vbo_mem = clCreateFromGLBuffer(context, CL_MEM_READ_WRITE, vbo, &err);
+GLuint initTexture(int width,int height) {
+	GLuint tex = NULL;
+	glGenTextures(1,&tex);
+	glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
+	glBindTexture(GL_TEXTURE_RECTANGLE_ARB,tex);
+	glTexImage2D(GL_TEXTURE_RECTANGLE_ARB,0,
+		GL_RGBA32F_ARB,width,height,
+		0,GL_LUMINANCE,GL_FLOAT,NULL);
 
-	cl_program program = CreateProgram(context, "./vboKernel.cl");
-	if (program == NULL) return -1;
-
-	int w = 640;
-	int h = 480;
-	int seq = 0;
-	cl_mem cl_w = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int), &w, &err);
-	cl_mem cl_h = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int), &h, &err);
-	cl_mem cl_seq = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int), &seq, &err);
-
-	cl_kernel kernel = clCreateKernel(program, "init_vbo_kernel", &err);
-
-	clSetKernelArg(kernel, 0, sizeof(cl_mem), &cl_vbo_mem);
-	clSetKernelArg(kernel, 1, sizeof(cl_int), &cl_w);
-	clSetKernelArg(kernel, 2, sizeof(cl_int), &cl_h);
-	clSetKernelArg(kernel, 3, sizeof(cl_int), &cl_seq);
-
-	glFinish();
-
-	size_t tex_globalWorkSize[] = { 0 };
-	size_t tex_localWorkSize[] = { 0 };
-
-	cl_queue_properties properties = 0;
-	cl_command_queue_properties prop = 0;
-	//cl_command_queue queue = clCreateCommandQueue(context, device, prop ,&err);
-	cl_command_queue queue = clCreateCommandQueueWithProperties(context, device, &properties, &err);
-	if (queue != NULL) {
-		err = clEnqueueAcquireGLObjects(queue, 1, &cl_vbo_mem, 0, NULL, NULL);
-		err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, tex_globalWorkSize, tex_localWorkSize, 0, NULL, NULL);
-		clFinish(queue);
-		clReleaseCommandQueue(queue);
-		err = clEnqueueReleaseGLObjects(queue, 1, &cl_vbo_mem, 0, NULL, NULL);
-	}
-
-	clReleaseMemObject(cl_w);
-	clReleaseMemObject(cl_h);
-	clReleaseMemObject(cl_seq);
-
-	clReleaseProgram(program);
-	return 0;
+	return tex;
 }
 
-int glProcess(GLuint vbo, int vbolen) {
+void renderTexture(GLuint tex, int w, int h)
+{
+	glEnable(GL_TEXTURE_RECTANGLE_ARB);
+	glBindTexture(GL_TEXTURE_RECTANGLE_ARB, tex);
+	glBegin(GL_QUADS);
+		glTexCoord2f(0, 0);
+		glVertex2f(0, 0);
+		glTexCoord2f(0, h);
+		glVertex2f(0, h);
+		glTexCoord2f(w, h);
+		glVertex2f(w, h);
+		glTexCoord2f(w, 0);
+		glVertex2f(w, 0);
+	glEnd();
+	glDisable(GL_TEXTURE_RECTANGLE_ARB);
+}
+
+void renderVBO(GLuint vbo, int vbolen) {
+	glColor3f(1.0f, 1.0f, 1.0f);
+	glLineWidth(2.0f);
+
 	glBindBufferARB(GL_ARRAY_BUFFER_ARB, vbo);
 	glEnableClientState(GL_VERTEX_ARRAY);
+	
 	glVertexPointer(2, GL_FLOAT, 0, 0);
 	glDrawArrays(GL_LINES, 0, vbolen * 2);
+
+	glDisableClientState(GL_VERTEX_ARRAY);
 	glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
-
-	return 0;
 }
 
-GLuint vbo = NULL;
-int Process(cl_context context, cl_device_id device) {
-	vbo = initVBO(640 * 480);
-	vboProcess(context, device,vbo);
-	glProcess(vbo,640*480);
-	return -1;
-}
-
-int clInit() {
-	cl_uint num = 0;
-	cl_int err = clGetPlatformIDs(0, 0, &num);
-	if (err < 0) {
-		return -1;
-	}
-	std::vector<cl_platform_id> platforms(num);
-	err = clGetPlatformIDs(num, &platforms[0], &num);
-	if (err < 0) {
-		return -1;
-	}
-
-	printf("PlatformIDs:%d \n", num);
-
-	cl_context context = NULL;
-	cl_device_id id = NULL;
-	std::vector<cl_device_id> deviceIDs;
-
-	for (cl_int i = 0; i < num; i++) {
-		printf("%s %d:\n", "PLATFORM", i);
-		char buf[1024] = { 0 };
-		size_t size = 0;
-		err = clGetPlatformInfo(platforms[i], CL_PLATFORM_EXTENSIONS, 1024, buf, &size);
-		if (err < 0) continue;
-		printf("	EXTENSIONS:%s\n", buf);
-
-		if (strstr(buf,"cl_khr_gl_sharing") == NULL) {
-			continue;
-		}
-
-		//if (context == NULL) {
-			//cl_context_properties props[] = { CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platforms[i]), 0 };
-			//cl_context_properties * props = GetGLContextProperties(platforms[i]);
-			//context = clCreateContext(props, CL_DEVICE_TYPE_ALL, NULL, NULL, NULL, &err);
-		//}
-
-		cl_uint deviceNum = 0;
-		err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &deviceNum);
-		if (err < 0) continue;
-
-		std::vector<cl_device_id> devices(deviceNum);
-		err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, deviceNum, &devices[0], &deviceNum);
-		if (err < 0) continue;
-
-		printf("	  Devices:%d\n", deviceNum);
-		char deviceBuf[1024] = { 0 };
-		size_t deviceSize = 0;
-		for (cl_int j = 0; j < deviceNum; j++) {
-			err = clGetDeviceInfo(devices[j], CL_DEVICE_TYPE, 1024, deviceBuf, &deviceSize);
-			if (err < 0) continue;
-			cl_uint type = *((cl_uint*)deviceBuf);
-			printf("		TYPE:%d\n", type);
-			err = clGetDeviceInfo(devices[j], CL_DEVICE_NAME, 1024, deviceBuf, &deviceSize);
-			if (err < 0) continue;
-			printf("		NAME:%s\n", deviceBuf);	
-
-			if (context == NULL && (type == CL_DEVICE_TYPE_GPU || type == CL_DEVICE_TYPE_CPU)) {
-				//cl_context_properties props[] = { CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platforms[i]), 0 };
-				cl_context_properties * props = GetGLContextProperties(platforms[i]);
-				deviceIDs = devices;
-				id = devices[j];
-				context = clCreateContext(props, 1, &id, NULL, NULL, &err);
-				//context = clCreateContext(props, CL_DEVICE_TYPE_ALL, NULL, NULL, NULL, &err);
-			}
-		}
-	}
-
-	if (context != NULL) {
-		Process(context, id);
-		//clReleaseContext(context);
-	}
-
-	return 0;
-}
-
-void ShowVersion()
-{
-	const GLubyte* name = glGetString(GL_VENDOR); //返回负责当前OpenGL实现厂商的名字  
-	const GLubyte* biaoshifu = glGetString(GL_RENDERER); //返回一个渲染器标识符，通常是个硬件平台  
-	const GLubyte* OpenGLVersion = glGetString(GL_VERSION); //返回当前OpenGL实现的版本号  
-	const GLubyte* Extensions  =glGetString(GL_EXTENSIONS);  
-	const GLubyte* gluVersion = gluGetString(GLU_VERSION); //返回当前GLU工具库版本  
-	printf("OpenGL实现厂商的名字：%s\n", name);
-	printf("渲染器标识符：%s\n", biaoshifu);
-	printf("OpenGL实现的版本号：%s\n", OpenGLVersion);
-	printf("OpenGL支持的扩展：%s\n",Extensions );  
-	printf("OGLU工具库版本：%s\n", gluVersion);
-}
-
-void MMain() {
+void DCProcess() {
 	const int WIDTH = 500;
 	const int HEIGHT = 500;
 
@@ -327,7 +276,8 @@ void MMain() {
 	if (hglrc == 0) std::cout << "OpenGL resource context creation failed";
 	wglMakeCurrent(hdc, hglrc);
 
-	int ret = clInit();
+	GLuint vbo = initVBO(640 * 480 * 4);
+	vboProcess(vbo);
 
 	wglDeleteContext(hglrc); // Delete RC
 
@@ -336,33 +286,79 @@ void MMain() {
 	DeleteDC(hdc); // Delete DC
 }
 
-void Callback() {
-	glProcess(vbo, 640 * 480);
+int dcMain(int argc, char **argv) {
+	glewInit();
+	glVersion();
+	DCProcess();
+	return 0;
+}
+
+void glInitWindow() {
+	//glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+	glutInitWindowPosition(100, 100);
+	glutInitWindowSize(800, 800);
+	glutCreateWindow("测试");
+	glewInit();
+	glVersion();
+
+	if (glewIsSupported("GL_VERSION_2_1"))
+		printf("Ready for OpenGL 2.1\n");
+	else {
+		printf("Warning: Detected that OpenGL 2.1 not supported\n");
+	}
+}
+
+GLuint tex = NULL;
+GLuint vbo = NULL;
+TaskArgs *args = NULL;
+int seq = 0;
+
+void renderScene() {
+	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glFinish();
+	vboProcess(args, 640, 480, seq++ );
+
+	renderTexture(tex,640,480);
+	renderVBO(vbo, 640 * 480);
+	glutSwapBuffers();
+}
+
+void reshape(int width, int height)
+{
+	glViewport(0, 0, width, height);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluOrtho2D(0, width, height, 0);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
 }
 
 int glMain(int argc, char **argv) {
-	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
-	glutInitWindowPosition(100, 100);
-	glutInitWindowSize(640, 480);
-	glutCreateWindow("测试");
+	glInitWindow();
+	vbo = initVBO(640*480*4);
+	tex = initTexture(640,480);
 
-	glewInit();
-	ShowVersion();
+	cl_context context = CreateContext(CL_DEVICE_TYPE_GPU);
+	args = initTask(context,vbo,640,480,0);
 
-	int ret = clInit();
-
-	glutDisplayFunc(Callback);
+	glutDisplayFunc(renderScene);
+	glutIdleFunc(renderScene);
+	glutReshapeFunc(reshape);
 	glutMainLoop();
+
+	if (args != NULL) {
+		uninitTask(args);
+		free(args);
+	}
 	return 0;
 }
 
 int main(int argc, char **argv) {
-	glMain(argc,argv);
-
-	//glewInit();
-	//ShowVersion();
-	//MMain();
+	return glMain(argc,argv);
+	return dcMain(argc,argv);
 	return 0;
 }
 
@@ -371,7 +367,5 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	LPSTR     lpCmdLine,
 	int       nCmdShow)
 {
-	
-	MMain();
-	return 0;
+	return main(0,NULL);
 }

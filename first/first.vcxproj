@@ -92,10 +92,12 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>C:\Program Files (x86)\Intel\OpenCL SDK\6.3\include;..\glew\include;..\glut;..\util</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>C:\Program Files (x86)\Intel\OpenCL SDK\6.3\lib\x86;..\glew\lib;..\glut\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -149,10 +151,19 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\util\clDeviceInfo.cpp" />
+    <ClCompile Include="..\util\clPlatformInfo.cpp" />
+    <ClCompile Include="..\util\clProgramInfo.cpp" />
     <ClCompile Include="first.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Kernal1.cl" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\util\clDeviceInfo.h" />
+    <ClInclude Include="..\util\clPlatformInfo.h" />
+    <ClInclude Include="..\util\clProgramInfo.h" />
+    <ClInclude Include="..\util\glVersion.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
