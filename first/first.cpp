@@ -70,7 +70,11 @@ int Process(cl_context context, cl_device_id id) {
 
 #pragma comment(lib,"Opengl32.lib")
 #pragma comment(lib,"glu32.lib")
+#ifdef _DEBUG
+#pragma comment(lib,"glew32d.lib")
+#else
 #pragma comment(lib,"glew32.lib")
+#endif
 #pragma comment(lib,"glut32.lib")
 
 void glInitWindow() {
@@ -92,14 +96,14 @@ int main(int argc, char **argv) {
 	std::vector<cl_platform_device_info> infos;
 	for (cl_int i = 0; i < platforms.size(); i++) {
 		printf("%s %d:\n", "PLATFORM",i);
-		printPlatformInfo(platforms[i]);
+		printPlatformInfo(stdout,platforms[i]);
 
 		std::vector<cl_device_id> deviceIDs = GetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL);
 		printf("Devices:%d\n", deviceIDs.size());
 
 		for (cl_int j = 0; j < deviceIDs.size(); j++) {
 			printf("ID:%d\n",j);
-			printDeviceInfo(deviceIDs[j]);
+			printDeviceInfo(stdout, deviceIDs[j]);
 
 			cl_platform_device_info info = { 0 };
 			info.platform = platforms[i];
@@ -116,7 +120,7 @@ int main(int argc, char **argv) {
 
 		if (context != NULL) {
 			printf("Context:\n");
-			printContextInfo(context);
+			printContextInfo(stdout, context);
 			err = Process(context, infos[index].device);
 			clReleaseContext(context);
 

@@ -6,8 +6,8 @@ typedef struct CL_PLATFORM_DEVICE_INFO {
 	cl_device_id   device;
 }cl_platform_device_info;
 
-void printDeviceInfo(cl_device_id deviceid);
+void printDeviceInfo(FILE * f,cl_device_id deviceid);
 
-void printContextInfo(cl_context context);
+void printContextInfo(FILE * f,cl_context context);
 
 cl_device_type getDeviceType(cl_device_id deviceid);

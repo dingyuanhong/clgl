@@ -50,38 +50,40 @@ const char* GetExecCapability(cl_device_exec_capabilities it)
 		return "UNKNOWN";
 }
 
-void printGB(cl_long value) {
-	cl_int bValue = value % 1024;
-	cl_int kbValue = (cl_int)(value / 1024) % 1024;
-	cl_int mbValue = (cl_int)(value / (1024 * 1024)) % 1024;
-	cl_int gbValue = (cl_int)(value / (1024 * 1024)) / 1024;
-
-	if (gbValue > 0) {
-		printf("%dg.", gbValue);
-	}
-	if (mbValue > 0) {
-		printf("%dm.", mbValue);
-	}
-	if (kbValue > 0) {
-		printf("%dk.", kbValue);
-	}
-	if (bValue > 0) {
-		printf("%db.", bValue);
-	}
+//void printGB(cl_long value) 
+#define printGB(v)	\
+{															\
+	cl_long value = (v);									\
+	cl_int bValue = value % 1024;							\
+	cl_int kbValue = (cl_int)(value / 1024) % 1024;			\
+	cl_int mbValue = (cl_int)(value / (1024 * 1024)) % 1024;\
+	cl_int gbValue = (cl_int)(value / (1024 * 1024)) / 1024;\
+	if (gbValue > 0) {				\
+		fprintf(f, "%dg.", gbValue);\
+	}								\
+	if (mbValue > 0) {				\
+		fprintf(f, "%dm.", mbValue);\
+	}								\
+	if (kbValue > 0) {				\
+		fprintf(f, "%dk.", kbValue);\
+	}								\
+	if (bValue > 0) {				\
+		fprintf(f, "%db.", bValue);	\
+	}								\
 }
 
 #define PRINTDRIVER()	\
 	err = 0;																\
 	err = clGetDeviceInfo(deviceid, CL_DRIVER_VERSION, 1024, buffer, &size);	\
 	if (err >= 0 && size > 0) {												\
-		printf("DriverVersion :%s\n", buffer);										\
+		fprintf(f, "DriverVersion :%s\n", buffer);										\
 	}
 
 #define PRINT(name,type)	\
 	err = 0;																\
 	err = clGetDeviceInfo(deviceid, CL_DEVICE_##type, 1024, buffer, &size);	\
 	if (err >= 0 && size > 0) {												\
-		printf(#name" :%s\n", buffer);										\
+		fprintf(f, #name" :%s\n", buffer);										\
 	}
 
 #define PRINTHEX(name,type)	\
@@ -89,15 +91,15 @@ void printGB(cl_long value) {
 	err = clGetDeviceInfo(deviceid, CL_DEVICE_##type, 1024, buffer, &size);	\
 	if (err >= 0 && size > 0) {												\
 		if(size == 4){														\
-			cl_uint value = *((cl_uint*)buffer);								\
-			printf(#name " :%04X\n", value);									\
+			cl_uint value = *((cl_uint*)buffer);							\
+			fprintf(f, #name " :%04X\n", value);							\
 		}																	\
 		else if (size == 8) {												\
 			cl_long value = *((cl_long*)buffer);							\
-			printf(#name " :%0I64X\n", value);								\
+			fprintf(f, #name " :%0I64X\n", value);							\
 		}																	\
 		else {																\
-			printf(#name " :%s(%d)\n", buffer,size);							\
+			fprintf(f, #name " :%s(%d)\n", buffer,size);					\
 		}																	\
 	}
 
@@ -106,15 +108,15 @@ void printGB(cl_long value) {
 	err = clGetDeviceInfo(deviceid, CL_DEVICE_##type, 1024, buffer, &size);	\
 	if (err >= 0 && size > 0) {												\
 		if(size == 4){														\
-			cl_uint value = *((cl_uint*)buffer);								\
-			printf(#name " :%u\n", value);									\
+			cl_uint value = *((cl_uint*)buffer);							\
+			fprintf(f, #name " :%u\n", value);								\
 		}																	\
 		else if (size == 8) {												\
 			cl_long value = *((cl_long*)buffer);							\
-			printf(#name " :%I64u\n", value);								\
+			fprintf(f, #name " :%I64u\n", value);							\
 		}																	\
 		else {																\
-			printf(#name " :%s(%d)\n", buffer,size);							\
+			fprintf(f, #name " :%s(%d)\n", buffer,size);					\
 		}																	\
 	}
 
@@ -123,19 +125,19 @@ void printGB(cl_long value) {
 	err = clGetDeviceInfo(deviceid, CL_DEVICE_##type, 1024, buffer, &size);	\
 	if (err >= 0 && size > 0) {												\
 		if(size == 4){														\
-			cl_uint value = *((cl_uint*)buffer);								\
-			printf(#name " :%u(",value);												\
-			printGB(value);													\
-			printf(")\n");													\
+			cl_uint v = *((cl_uint*)buffer);							\
+			fprintf(f, #name " :%u(",v);								\
+			printGB(v);													\
+			fprintf(f, ")\n");												\
 		}																	\
 		else if (size == 8) {												\
-			cl_long value = *((cl_long*)buffer);							\
-			printf(#name " :%I64u(",value);												\
-			printGB(value);													\
-			printf(")\n");													\
+			cl_long v = *((cl_long*)buffer);							\
+			fprintf(f, #name " :%I64u(",v);								\
+			printGB(v);													\
+			fprintf(f, ")\n");												\
 		}																	\
 		else {																\
-			printf(#name " :%s(%d)\n", buffer,size);							\
+			fprintf(f, #name " :%s(%d)\n", buffer,size);					\
 		}																	\
 	}
 
@@ -144,7 +146,7 @@ void printGB(cl_long value) {
 	err = clGetDeviceInfo(deviceid, CL_DEVICE_TYPE, 1024, buffer, &size);	\
 	if (err >= 0 && size > 0) {												\
 		cl_device_type type = *((cl_device_type*)buffer);					\
-		printf(#name " :%s(%d)\n", GetDeviceType(type),(cl_uint)type);				\
+		fprintf(f, #name " :%s(%d)\n", GetDeviceType(type),(cl_uint)type);	\
 	}
 
 #define PRINTMEMCACHETYPE(name,type)	\
@@ -152,7 +154,7 @@ void printGB(cl_long value) {
 	err = clGetDeviceInfo(deviceid, CL_DEVICE_##type, 1024, buffer, &size);	\
 	if (err >= 0 && size > 0) {												\
 		cl_device_mem_cache_type value = *((cl_device_mem_cache_type*)buffer);\
-		printf(#name " :%s(%d)\n", GetMemCacheType(value),(cl_uint)value);				\
+		fprintf(f, #name " :%s(%d)\n", GetMemCacheType(value),(cl_uint)value);\
 	}
 
 #define PRINTEXECCAPABILITY(name,type)	\
@@ -160,12 +162,13 @@ void printGB(cl_long value) {
 	err = clGetDeviceInfo(deviceid, CL_DEVICE_##type, 1024, buffer, &size);	\
 	if (err >= 0 && size > 0) {												\
 		cl_device_exec_capabilities value = *((cl_device_exec_capabilities*)buffer);\
-		printf(#name " :%s(%d)\n", GetExecCapability(value),(cl_uint)value);				\
+		fprintf(f, #name " :%s(%d)\n", GetExecCapability(value),(cl_uint)value);	\
 	}
 
 
-void printDeviceInfo(cl_device_id deviceid)
+void printDeviceInfo(FILE * f,cl_device_id deviceid)
 {
+	fprintf(f, "Device:------------------------------------------------------------\n");
 	char buffer[1024] = { 0 };
 	size_t size = 0;
 	cl_int err = 0;
@@ -336,7 +339,7 @@ void printDeviceInfo(cl_device_id deviceid)
 	//´òÓ¡Êä³ö»º³åÇø
 	PRINTMEMORYSIZE(PrintfBufferSize, PRINTF_BUFFER_SIZE);
 
-	printf("------------------------------------------------------------\n");
+	fprintf(f, "------------------------------------------------------------\n");
 }
 
 
@@ -353,19 +356,20 @@ void printDeviceInfo(cl_device_id deviceid)
 	if (err >= 0 && size > 0) {									\
 		if (size == 4) {										\
 			cl_uint value = *((cl_uint*)buffer);				\
-			printf(#name " :%u\n", value);						\
+			fprintf(f, #name " :%u\n", value);						\
 		}														\
 		else if (size == 8) {									\
 			cl_long value = *((cl_long*)buffer);				\
-			printf(#name " :%0I64u\n", value);					\
+			fprintf(f, #name " :%0I64u\n", value);					\
 		}														\
 		else {													\
-			printf(#name " :%s(%d)\n", buffer, size);			\
+			fprintf(f, #name " :%s(%d)\n", buffer, size);			\
 		}														\
 	}
 
-void printContextInfo(cl_context context)
+void printContextInfo(FILE * f, cl_context context)
 {
+	fprintf(f, "Context:------------------------------------------------------------\n");
 	char buffer[1024] = { 0 };
 	size_t size = 0;
 	cl_int err = 0;
@@ -383,10 +387,10 @@ void printContextInfo(cl_context context)
 		cl_device_id *value = ((cl_device_id*)buffer);
 		printf("DEVICES:");
 		for (cl_int i = 0; i < deviceNum; i++) {
-			printf(" %d:0x%p",i, value[i]);
+			fprintf(f, " %d:0x%p",i, value[i]);
 		}
-		printf("\n");
+		fprintf(f, "\n");
 	}
 
-	printf("------------------------------------------------------------\n");
+	fprintf(f, "------------------------------------------------------------\n");
 }

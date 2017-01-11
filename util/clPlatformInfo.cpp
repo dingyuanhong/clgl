@@ -2,51 +2,51 @@
 #include <stdio.h>
 #include "clPlatformInfo.h"
 
-void printPlatformInfo(cl_platform_id platformid)
+void printPlatformInfo(FILE * f,cl_platform_id platformid)
 {
-	printf("------------------------------------------------------------\n");
+	fprintf(f,"Platform:------------------------------------------------------------\n");
 	char buf[1024] = { 0 };
 	size_t size = 0;
 	cl_int err = clGetPlatformInfo(platformid, CL_PLATFORM_NAME, 1024, buf, &size);
 	if (err >= 0 && size > 0) {
-		printf("Name:%s\n", buf);
+		fprintf(f, "Name:%s\n", buf);
 	}
 	size = 0;
 	err = clGetPlatformInfo(platformid, CL_PLATFORM_PROFILE, 1024, buf, &size);
 	if (err >= 0 && size > 0) {
-		printf("Profile:%s\n", buf);
+		fprintf(f, "Profile:%s\n", buf);
 	}
 	size = 0;
 	err = clGetPlatformInfo(platformid, CL_PLATFORM_VERSION, 1024, buf, &size);
 	if (err >= 0 && size > 0) {
-		printf("Version:%s\n", buf);
+		fprintf(f, "Version:%s\n", buf);
 	}
 	size = 0;
 	err = clGetPlatformInfo(platformid, CL_PLATFORM_VENDOR, 1024, buf, &size);
 	if (err >= 0 && size > 0) {
-		printf("Vendor:%s\n", buf);
+		fprintf(f, "Vendor:%s\n", buf);
 	}
 	size = 0;
 	err = clGetPlatformInfo(platformid, CL_PLATFORM_EXTENSIONS, 1024, buf, &size);
 	if (err >= 0 && size > 0) {
-		printf("Extensions:%s\n", buf);
+		fprintf(f, "Extensions:%s\n", buf);
 	}
 	size = 0;
 	err = clGetPlatformInfo(platformid, CL_PLATFORM_HOST_TIMER_RESOLUTION, 1024, buf, &size);
 	if (err >= 0 && size > 0) {
 		if (size == 8) {
 			cl_long timer = *(cl_long*)buf;
-			printf("HostTimerResolution:%I64d\n", timer);
+			fprintf(f, "HostTimerResolution:%I64d\n", timer);
 		}
 		else if (size == 4) {
 			cl_int timer = *(cl_int*)buf;
-			printf("HostTimerResolution:%d\n", timer);
+			fprintf(f, "HostTimerResolution:%d\n", timer);
 		}
 		else {
-			printf("HostTimerResolution:%s(%d)\n", buf,size);
+			fprintf(f, "HostTimerResolution:%s(%d)\n", buf,size);
 		}
 	}
-	printf("          --------------------------------------------------\n");
+	fprintf(f, "------------------------------------------------------------\n");
 }
 
 std::vector<cl_device_id> GetDeviceIDs(cl_platform_id platformid, cl_uint deviceType)
