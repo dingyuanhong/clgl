@@ -1,12 +1,16 @@
 #pragma once
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <GL/glew.h>
 #if defined(GLEW_OSMESA)
 #define GLAPI extern
 #include <GL/osmesa.h>
 #elif defined(GLEW_EGL)
 #include <GL/eglew.h>
-#elif defined(_WIN32)
+#elif defined(WIN32)
 #include <GL/wglew.h>
 #elif defined(__APPLE__) && !defined(GLEW_APPLE_GLX)
 #include <OpenGL/OpenGL.h>
@@ -14,6 +18,18 @@
 #elif !defined(__HAIKU__)
 #include <GL/glxew.h>
 #endif
+
+#if defined(__APPLE__)
+#include <AvailabilityMacros.h>
+#endif
+
+#ifdef GLEW_REGAL
+#include <GL/Regal.h>
+#endif
+
+#ifdef  __cplusplus  
+extern "C" {
+#endif 
 
 typedef struct GLContextStruct
 {
@@ -38,17 +54,18 @@ typedef struct GLContextStruct
 } GLContext;
 
 //用于处理
-void glewVInitContext(GLContext* ctx);
-GLboolean glewVCreateContext(GLContext* ctx);
+void glewInitContextV(GLContext* ctx);
+GLboolean glewCreateContextV(GLContext* ctx);
 #ifdef WIN32
-GLboolean _glewVCreateContext(GLContext* ctx, int visual);
+GLboolean _glewCreateContextV(GLContext* ctx, int visual);
 #elif defined(GLEW_OSMESA)
-GLboolean _glewVCreateContext(GLContext* ctx, GLint osmWidth, GLint osmHeight, GLint osmFormat, GLubyte **osmPixels);
+GLboolean _glewCreateContextV(GLContext* ctx, GLint osmWidth, GLint osmHeight, GLint osmFormat, GLubyte **osmPixels);
 #endif
-void glewVDestroyContext(GLContext* ctx);
+void glewDestroyContextV(GLContext* ctx);
 
 //打印状态
-void VisualInfoPrint(GLContext* ctx, FILE *file);
+void glewVisualInfoPrint(FILE *file, GLContext* ctx);
+
 
 struct createParams
 {
@@ -66,10 +83,10 @@ struct createParams
 	int         profile;       /* core = 1, compatibility = 2 */
 	int         flags;         /* debug = 1, forward compatible = 2 */
 };
-
-
 GLboolean glewCreateContext(GLContext* ctx, struct createParams* params);
 void glewDestroyContext(GLContext* ctx);
+void glewInfoPrint(FILE *f, struct createParams params);
 
-void glxewInfoPrint(FILE *f, struct createParams params);
-
+#ifdef  __cplusplus  
+}
+#endif  /* end of __cplusplus */  

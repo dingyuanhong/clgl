@@ -12,15 +12,15 @@ void glVersion()
 	const GLubyte* OpenGLVersion = glGetString(GL_VERSION); //返回当前OpenGL实现的版本号  
 	const GLubyte* Extensions = glGetString(GL_EXTENSIONS);
 	const GLubyte* gluVersion = gluGetString(GLU_VERSION); //返回当前GLU工具库版本  
-	printf("OpenGL实现厂商的名字：%s\n", name);
-	printf("渲染器标识符：%s\n", biaoshifu);
-	printf("OpenGL实现的版本号：%s\n", OpenGLVersion);
-	//printf("OpenGL支持的扩展：%s\n", Extensions);
-	printf("OGLU工具库版本：%s\n", gluVersion);
+	printf("OpenGL实现厂商名字	：%s\n", name);
+	printf("OpenGL渲染器标识符	：%s\n", biaoshifu);
+	printf("OpenGL实现的版本号	：%s\n", OpenGLVersion);
+	//printf("OpenGL支持的扩展	：%s\n", Extensions);
+	printf("OGLU工具库版本		：%s\n", gluVersion);
 
 	if (glewIsSupported("GL_VERSION_2_1"))
-		printf("Ready for OpenGL 2.1\n");
+		printf("		Ready for OpenGL 2.1\n");
 	else {
-		printf("Warning: Detected that OpenGL 2.1 not supported\n");
+		printf("		Warning: Detected that OpenGL 2.1 not supported\n");
 	}
 }

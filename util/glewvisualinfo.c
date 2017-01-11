@@ -30,15 +30,12 @@
 ** stcl     = # bits of stencil
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "glewinfo.h"
 
 #ifdef GLEW_MX
 GLEWContext _glewctx;
 #  define glewGetContext() (&_glewctx)
-#  ifdef _WIN32
+#  ifdef WIN32
 WGLEWContext _wglewctx;
 #    define wglewGetContext() (&_wglewctx)
 #  elif !defined(__APPLE__) && !defined(__HAIKU__) || defined(GLEW_APPLE_GLX)
@@ -50,7 +47,7 @@ GLXEWContext _glxewctx;
 
 /* do the magic to separate all extensions with comma's, except
    for the last one that _may_ terminate in a space. */
-void PrintExtensions (FILE* file,const char* s)
+static void PrintExtensions (FILE* file,const char* s)
 {
   char t[80];
   int i=0;
@@ -94,14 +91,14 @@ void PrintExtensions (FILE* file,const char* s)
 
 #if defined(GLEW_OSMESA) || defined(GLEW_EGL)
 
-void
+static void
 VisualInfo (GLContext* ctx, FILE* file)
 {
 }
 
-#elif defined(_WIN32)
+#elif defined(WIN32)
 
-void
+static void
 VisualInfoARB (GLContext* ctx, FILE* file,int verbose,int notshowall)
 {
   int attrib[32], value[32], n_attrib, n_pbuffer=0, n_float=0;
@@ -308,7 +305,7 @@ VisualInfoARB (GLContext* ctx, FILE* file,int verbose,int notshowall)
   }
 }
 
-void
+static void
 VisualInfoGDI (GLContext* ctx, FILE* file, int verbose,int drawableonly)
 {
   int i, maxpf;
@@ -440,7 +437,7 @@ VisualInfo (GLContext* ctx, FILE* file)
 
 #elif defined(__APPLE__) && !defined(GLEW_APPLE_GLX)
 
-void
+static void
 VisualInfo (GLContext* __attribute__((__unused__)) ctx)
 {
 /*
@@ -461,7 +458,7 @@ VisualInfo (GLContext* __attribute__((__unused__)) ctx)
 
 #elif defined(__HAIKU__)
 
-void
+static void
 VisualInfo (GLContext* ctx)
 {
   /* TODO */
@@ -469,7 +466,7 @@ VisualInfo (GLContext* ctx)
 
 #else /* GLX */
 
-void
+static void
 VisualInfo (GLContext* ctx)
 {
   int n_fbc;
@@ -843,10 +840,10 @@ VisualInfo (GLContext* ctx)
 
 #endif
 
-static void VisualInfoPrint(GLContext* ctx,FILE *file) {
+void glewVisualInfoPrint(FILE *file,GLContext* ctx) {
 #ifdef GLEW_MX
 	int err = glewContextInit(glewGetContext());
-#  ifdef _WIN32
+#  ifdef WIN32
 	err = err || wglewContextInit(wglewGetContext());
 #  elif !defined(__APPLE__) && !defined(__HAIKU__) || defined(GLEW_APPLE_GLX)
 	err = err || glxewContextInit(glxewGetContext());
@@ -881,7 +878,7 @@ static void VisualInfoPrint(GLContext* ctx,FILE *file) {
 	/* extensions string */
 #if defined(GLEW_OSMESA)
 #elif defined(GLEW_EGL)
-#elif defined(_WIN32)
+#elif defined(WIN32)
 	/* WGL extensions */
 	if (WGLEW_ARB_extensions_string || WGLEW_EXT_extensions_string)
 	{
@@ -911,12 +908,12 @@ static void VisualInfoPrint(GLContext* ctx,FILE *file) {
 /* ------------------------------------------------------------------------ */
 
 #if defined(GLEW_OSMESA)
-void glewVInitContext (GLContext* ctx)
+void glewInitContextV (GLContext* ctx)
 {
   ctx->ctx = NULL;
 }
 
-GLboolean _glewVCreateContext(GLContext* ctx, GLint osmWidth, GLint osmHeight, GLint osmFormat, GLubyte **osmPixels)
+GLboolean _glewCreateContextV(GLContext* ctx, GLint osmWidth, GLint osmHeight, GLint osmFormat, GLubyte **osmPixels)
 {
 	if (NULL == ctx) return GL_TRUE;
 	if (NULL == osmPixels) return GL_FALSE;
@@ -933,16 +930,16 @@ GLboolean _glewVCreateContext(GLContext* ctx, GLint osmWidth, GLint osmHeight, G
 	return GL_FALSE;
 }
 
-GLboolean glewVCreateContext (GLContext* ctx)
+GLboolean glewCreateContextV (GLContext* ctx)
 {
 	static const GLint osmFormat = GL_UNSIGNED_BYTE;
 	static const GLint osmWidth = 640;
 	static const GLint osmHeight = 480;
 	static GLubyte *osmPixels = NULL;
-	return _glewVCreateContext(ctx, osmWidth,osmHeight,osmFormat,&osmPixels);
+	return _glewCreateContextV(ctx, osmWidth,osmHeight,osmFormat,&osmPixels);
 }
 
-void glewVDestroyContext (GLContext* ctx)
+void glewDestroyContextV (GLContext* ctx)
 {
   if (NULL == ctx) return;
   if (NULL != ctx->ctx) OSMesaDestroyContext(ctx->ctx);
@@ -950,17 +947,17 @@ void glewVDestroyContext (GLContext* ctx)
 /* ------------------------------------------------------------------------ */
 
 #elif defined(GLEW_EGL)
-void glewVInitContext (GLContext* ctx)
+void glewInitContextV (GLContext* ctx)
 {
   ctx->ctx = NULL;
 }
 
-GLboolean glewVCreateContext (GLContext* ctx)
+GLboolean glewCreateContextV (GLContext* ctx)
 {
   return GL_FALSE;
 }
 
-void glewVDestroyContext (GLContext* ctx)
+void glewDestroyContextV (GLContext* ctx)
 {
   if (NULL == ctx) return;
   return;
@@ -968,16 +965,16 @@ void glewVDestroyContext (GLContext* ctx)
 
 /* ------------------------------------------------------------------------ */
 
-#elif defined(_WIN32)
+#elif defined(WIN32)
 
-void glewVInitContext (GLContext* ctx)
+void glewInitContextV (GLContext* ctx)
 {
   ctx->wnd = NULL;
   ctx->dc = NULL;
   ctx->rc = NULL;
 }
 
-GLboolean _glewVCreateContext(GLContext* ctx, int visual)
+GLboolean _glewCreateContextV(GLContext* ctx, int visual)
 {
   WNDCLASSA wc;
   PIXELFORMATDESCRIPTOR pfd;
@@ -1018,12 +1015,12 @@ GLboolean _glewVCreateContext(GLContext* ctx, int visual)
   return GL_FALSE;
 }
 
-GLboolean glewVCreateContext(GLContext* ctx)
+GLboolean glewCreateContextV(GLContext* ctx)
 {
-	return _glewVCreateContext(ctx,-1);
+	return _glewCreateContextV(ctx,-1);
 }
 
-void glewVDestroyContext (GLContext* ctx)
+void glewDestroyContextV (GLContext* ctx)
 {
   if (NULL == ctx) return;
   if (NULL != ctx->rc) wglMakeCurrent(NULL, NULL);
@@ -1037,13 +1034,13 @@ void glewVDestroyContext (GLContext* ctx)
 
 #elif defined(__APPLE__) && !defined(GLEW_APPLE_GLX)
 
-void glewVInitContext (GLContext* ctx)
+void glewInitContextV (GLContext* ctx)
 {
   ctx->ctx = NULL;
   ctx->octx = NULL;
 }
 
-GLboolean glewVCreateContext (GLContext* ctx)
+GLboolean glewCreateContextV (GLContext* ctx)
 {
   CGLPixelFormatAttribute attrib[] = { kCGLPFAAccelerated, 0 };
   CGLPixelFormatObj pf;
@@ -1062,7 +1059,7 @@ GLboolean glewVCreateContext (GLContext* ctx)
   return GL_FALSE;
 }
 
-void glewVDestroyContext (GLContext* ctx)
+void glewDestroyContextV (GLContext* ctx)
 {
   if (NULL == ctx) return;
   CGLSetCurrentContext(ctx->octx);
@@ -1073,7 +1070,7 @@ void glewVDestroyContext (GLContext* ctx)
 
 #elif defined(__HAIKU__)
 
-void glewVInitContext (GLContext* ctx)
+void glewInitContextV (GLContext* ctx)
 {
   /* TODO */
 }
@@ -1084,7 +1081,7 @@ GLboolean glewVCreateContext (GLContext* ctx)
   return GL_FALSE;
 }
 
-void glewVDestroyContext (GLContext* ctx)
+void glewDestroyContextV (GLContext* ctx)
 {
   /* TODO */
 }
@@ -1093,7 +1090,7 @@ void glewVDestroyContext (GLContext* ctx)
 
 #else /* __UNIX || (__APPLE__ && GLEW_APPLE_GLX) */
 
-void glewVInitContext (GLContext* ctx)
+void glewInitContextV (GLContext* ctx)
 {
   ctx->dpy = NULL;
   ctx->vi = NULL;
@@ -1102,7 +1099,7 @@ void glewVInitContext (GLContext* ctx)
   ctx->cmap = 0;
 }
 
-GLboolean glewVCreateContext (GLContext* ctx)
+GLboolean glewCreateContextV (GLContext* ctx)
 {
   int attrib[] = { GLX_RGBA, GLX_DOUBLEBUFFER, None };
   int erb, evb;
@@ -1134,7 +1131,7 @@ GLboolean glewVCreateContext (GLContext* ctx)
   return GL_FALSE;
 }
 
-void glewVDestroyContext (GLContext* ctx)
+void glewDestroyContextV (GLContext* ctx)
 {
   if (NULL != ctx->dpy && NULL != ctx->ctx) glXDestroyContext(ctx->dpy, ctx->ctx);
   if (NULL != ctx->dpy && 0 != ctx->wnd) XDestroyWindow(ctx->dpy, ctx->wnd);
