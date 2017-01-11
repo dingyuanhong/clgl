@@ -27,6 +27,15 @@
     <ClCompile Include="..\util\clProgramInfo.cpp">
       <Filter>Header Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\util\BMPFile.cpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\util\glewinfo.c">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\util\glewvisualinfo.c">
+      <Filter>Header Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="vboKernel.cl">
@@ -47,6 +56,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\util\clContextInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\util\BMPFile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\util\glewinfo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

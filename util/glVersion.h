@@ -17,4 +17,10 @@ void glVersion()
 	printf("OpenGL实现的版本号：%s\n", OpenGLVersion);
 	//printf("OpenGL支持的扩展：%s\n", Extensions);
 	printf("OGLU工具库版本：%s\n", gluVersion);
+
+	if (glewIsSupported("GL_VERSION_2_1"))
+		printf("Ready for OpenGL 2.1\n");
+	else {
+		printf("Warning: Detected that OpenGL 2.1 not supported\n");
+	}
 }

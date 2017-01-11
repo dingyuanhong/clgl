@@ -95,7 +95,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Program Files (x86)\Intel\OpenCL SDK\6.3\lib\x86;..\glew\lib;..\glut\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files (x86)\Intel\OpenCL SDK\6.3\lib\x86;..\glew\lib\$(Configuration)\$(Platform);..\glut\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -149,19 +149,24 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\util\BMPFile.cpp" />
     <ClCompile Include="..\util\clDeviceInfo.cpp" />
     <ClCompile Include="..\util\clPlatformInfo.cpp" />
     <ClCompile Include="..\util\clProgramInfo.cpp" />
+    <ClCompile Include="..\util\glewinfo.c" />
+    <ClCompile Include="..\util\glewvisualinfo.c" />
     <ClCompile Include="Interoperability.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="vboKernel.cl" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\util\BMPFile.h" />
     <ClInclude Include="..\util\clContextInfo.h" />
     <ClInclude Include="..\util\clDeviceInfo.h" />
     <ClInclude Include="..\util\clPlatformInfo.h" />
     <ClInclude Include="..\util\clProgramInfo.h" />
+    <ClInclude Include="..\util\glewinfo.h" />
     <ClInclude Include="..\util\glVersion.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
