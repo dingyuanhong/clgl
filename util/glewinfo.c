@@ -13491,10 +13491,21 @@ GLboolean glewCreateContext (GLContext* ctx,struct createParams* params)
   wc.hInstance = GetModuleHandle(NULL);
   wc.lpfnWndProc = DefWindowProc;
   wc.lpszClassName = "GLEW";
-  if (0 == RegisterClassA(&wc)) return GL_TRUE;
+  //wc.style = CS_OWNDC;
+  if (!GetClassInfoA(GetModuleHandle(NULL), wc.lpszClassName, &wc)) {
+	  if (0 == RegisterClassA(&wc)) return GL_TRUE;
+  }
+  int width = params->width;
+  if (width <= 0) {
+	  width = CW_USEDEFAULT;
+  }
+  int height = params->height;
+  if (height <= 0) {
+	  height = CW_USEDEFAULT;
+  }
   /* create window */
-  ctx->wnd = CreateWindowA("GLEW", "GLEW", 0, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                     CW_USEDEFAULT, NULL, NULL, GetModuleHandle(NULL), NULL);
+  ctx->wnd = CreateWindowA("GLEW", "GLEW", 0, CW_USEDEFAULT, CW_USEDEFAULT, width,
+	  height, NULL, NULL, GetModuleHandle(NULL), NULL);
   if (NULL == ctx->wnd) return GL_TRUE;
   /* get the device context */
   ctx->dc = GetDC(ctx->wnd);
@@ -13562,7 +13573,7 @@ void glewDestroyContext(GLContext* ctx) {
 	if (NULL != ctx->rc) wglDeleteContext(wglGetCurrentContext());
 	if (NULL != ctx->wnd && NULL != ctx->dc) ReleaseDC(ctx->wnd, ctx->dc);
 	if (NULL != ctx->wnd) DestroyWindow(ctx->wnd);
-	UnregisterClassA("GLEW", GetModuleHandle(NULL));
+	//UnregisterClassA("GLEW", GetModuleHandle(NULL));
 }
 
 /* ------------------------------------------------------------------------ */

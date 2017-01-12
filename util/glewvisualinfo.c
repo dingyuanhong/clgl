@@ -985,7 +985,10 @@ GLboolean _glewCreateContextV(GLContext* ctx, int visual)
   wc.hInstance = GetModuleHandle(NULL);
   wc.lpfnWndProc = DefWindowProc;
   wc.lpszClassName = "GLEW";
-  if (0 == RegisterClassA(&wc)) return GL_TRUE;
+  //wc.style = CS_OWNDC;
+  if (!GetClassInfoA(GetModuleHandle(NULL), wc.lpszClassName, &wc)) {
+	if (0 == RegisterClassA(&wc)) return GL_TRUE;
+  }
   /* create window */
   ctx->wnd = CreateWindowA("GLEW", "GLEW", 0, CW_USEDEFAULT, CW_USEDEFAULT,
                           CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, 
@@ -1002,6 +1005,7 @@ GLboolean _glewCreateContextV(GLContext* ctx, int visual)
     pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
     pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL;
+	//pfd.dwFlags |= PFD_DOUBLEBUFFER;
     visual = ChoosePixelFormat(ctx->dc, &pfd);
     if (0 == visual) return GL_TRUE;
   }
@@ -1027,7 +1031,7 @@ void glewDestroyContextV (GLContext* ctx)
   if (NULL != ctx->rc) wglDeleteContext(wglGetCurrentContext());
   if (NULL != ctx->wnd && NULL != ctx->dc) ReleaseDC(ctx->wnd, ctx->dc);
   if (NULL != ctx->wnd) DestroyWindow(ctx->wnd);
-  UnregisterClassA("GLEW", GetModuleHandle(NULL));
+  //UnregisterClassA("GLEW", GetModuleHandle(NULL));
 }
 
 /* ------------------------------------------------------------------------ */

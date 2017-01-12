@@ -73,6 +73,8 @@ struct createParams
 #elif defined(GLEW_EGL)
 #elif defined(_WIN32)
 	int         pixelformat;
+	int			width;
+	int			height;
 #elif !defined(__APPLE__) && !defined(__HAIKU__) || defined(GLEW_APPLE_GLX)
 	const char* display;
 	int         visual;

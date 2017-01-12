@@ -8,11 +8,16 @@
 #include <iostream>
 #include <istream>
 
+#include "glewinfo.h"
 #include "glVersion.h"
 #include "gl\glut.h"
 #pragma comment(lib,"Opengl32.lib")
 #pragma comment(lib,"glu32.lib")
+#ifdef _DEBUG
+#pragma comment(lib,"glew32d.lib")
+#else
 #pragma comment(lib,"glew32.lib")
+#endif
 #pragma comment(lib,"glut32.lib")
 
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
@@ -22,6 +27,8 @@
 #include "clProgramInfo.h"
 #include "clContextInfo.h"
 #pragma comment(lib,"OpenCL.lib")
+
+#include "BMPFile.h"
 
 cl_context CreateContext(cl_device_type type) {
 	std::vector<cl_platform_id> platforms = GetPlatformIDs();
@@ -148,17 +155,6 @@ int vboProcess(TaskArgs *args,int w,int h, int seq) {
 	}
 }
 
-void vboProcess(GLuint vbo) {
-	cl_context context = CreateContext(CL_DEVICE_TYPE_GPU);
-	TaskArgs *args = initTask(context, vbo, 640, 480, 0);
-	glFinish();
-	vboProcess(args, 640, 480, 0);
-	if (args != NULL) {
-		uninitTask(args);
-		free(args);
-	}
-}
-
 GLuint initVBO(int vbolen) {
 	GLint bsize;
 	GLuint vbo_buffer;
@@ -203,46 +199,71 @@ void renderTexture(GLuint tex, int w, int h)
 }
 
 void renderVBO(GLuint vbo, int vbolen) {
-	glColor3f(1.0f, 1.0f, 1.0f);
-	glLineWidth(2.0f);
+	glColor4f(1.0f, 1.0f, 1.0f,0.0f);
+	glLineWidth(0.5f);
 
 	glBindBufferARB(GL_ARRAY_BUFFER_ARB, vbo);
 	glEnableClientState(GL_VERTEX_ARRAY);
 	
 	glVertexPointer(2, GL_FLOAT, 0, 0);
-	glDrawArrays(GL_LINES, 0, vbolen * 2);
+	glDrawArrays(GL_LINES, 0, vbolen);
 
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
 }
 
-void DCProcess() {
-	const int WIDTH = 500;
-	const int HEIGHT = 500;
+void renderScene(TaskArgs *args, int seq,GLuint tex, GLuint vbo) {
+	glFinish();							//停止gl
+	vboProcess(args, 640, 480, seq);
 
-	// Create a memory DC compatible with the screen
-	HDC hdc = CreateCompatibleDC(0);
-	if (hdc == 0) std::cout << "Could not create memory device context";
+	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);//黑色背景
+	glClear(GL_COLOR_BUFFER_BIT);		// 清理颜色缓存
 
+	renderTexture(tex, 640, 480);
+	renderVBO(vbo, 640 * 480);
+}
+
+void reshape(int width, int height)
+{
+	glViewport(0, 0, width, height);	// 重置当前的视口
+	glMatrixMode(GL_PROJECTION);		// 选择投影矩阵
+	glLoadIdentity();					// 重置投影矩阵
+	gluOrtho2D(0, width, height, 0);	// 二维裁剪 （left，right，bottom，top）
+	//gluPerspective(45.0f, (GLfloat)width / (GLfloat)height, 0.1f, 100.0f); // 设置投影模式为透视投影
+	glMatrixMode(GL_MODELVIEW);			// 选择模型观察矩阵
+	glLoadIdentity();					// 重置模型观察矩阵
+}
+
+HBITMAP glewCreateContextDC(GLContext *ctx,int width,int height) {
 	// Create a bitmap compatible with the DC
 	// must use CreateDIBSection(), and this means all pixel ops must be synchronised
 	// using calls to GdiFlush() (see CreateDIBSection() docs)
+
 	BITMAPINFO bmi = {
-		{ sizeof(BITMAPINFOHEADER), WIDTH, HEIGHT, 1, 32, BI_RGB, 0, 0, 0, 0, 0 },
+		{ sizeof(BITMAPINFOHEADER), width, height, 1, 32, BI_RGB, 0, 0, 0, 0, 0 },
 		{ 0 }
 	};
 	DWORD *pbits; // pointer to bitmap bits
-	HBITMAP hbm = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, (void **)&pbits,
+	HBITMAP hbm = CreateDIBSection(ctx->dc, &bmi, DIB_RGB_COLORS, (void **)&pbits,
 		0, 0);
-	if (hbm == 0) std::cout << "Could not create bitmap";
+	if (hbm == 0) {
+		std::cout << "Could not create bitmap";
+		return NULL;
+	}
 
 	//HDC hdcScreen = GetDC(0);
-	//HBITMAP hbm = CreateCompatibleBitmap(hdcScreen,WIDTH,HEIGHT);
+	//HBITMAP hbm = CreateCompatibleBitmap(hdcScreen,width,height);
 
 	// Select the bitmap into the DC
-	HGDIOBJ r = SelectObject(hdc, hbm);
-	if (r == 0) std::cout << "Could not select bitmap into DC";
+	HGDIOBJ r = SelectObject(ctx->dc, hbm);
+	if (r == 0) {
+		DeleteObject(hbm);
 
+		std::cout << "Could not select bitmap into DC";
+		return NULL;
+	}
+	DeleteObject(r);
+	r = NULL;
 	// Choose the pixel format
 	PIXELFORMATDESCRIPTOR pfd = {
 		sizeof(PIXELFORMATDESCRIPTOR), // struct size
@@ -263,50 +284,159 @@ void DCProcess() {
 		0, // No visible mask
 		0 // No damage mask
 	};
-	int pfid = ChoosePixelFormat(hdc, &pfd);
-	if (pfid == 0) std::cout << "Pixel format selection failed";
+	int pfid = ChoosePixelFormat(ctx->dc, &pfd);
+	if (pfid == 0) {
+		DeleteObject(hbm);
+		std::cout << "Pixel format selection failed";
+		return NULL;
+	}
 
 	// Set the pixel format
 	// - must be done *after* the bitmap is selected into DC
-	BOOL b = SetPixelFormat(hdc, pfid, &pfd);
-	if (!b) std::cout << "Pixel format set failed";
+	BOOL b = SetPixelFormat(ctx->dc, pfid, &pfd);
+	if (!b) {
+		DeleteObject(hbm);
 
-	// Create the OpenGL resource context (RC) and make it current to the thread
-	HGLRC hglrc = wglCreateContext(hdc);
-	if (hglrc == 0) std::cout << "OpenGL resource context creation failed";
-	wglMakeCurrent(hdc, hglrc);
+		std::cout << "Pixel format set failed";
+		return NULL;
+	}
 
-	GLuint vbo = initVBO(640 * 480 * 4);
-	vboProcess(vbo);
+	if (ctx->rc == NULL) {
+		// Create the OpenGL resource context (RC) and make it current to the thread
+		HGLRC hglrc = wglCreateContext(ctx->dc);
+		if (hglrc == 0) {
+			DeleteObject(hbm);
 
-	wglDeleteContext(hglrc); // Delete RC
-
-	SelectObject(hdc, r); // Remove bitmap from DC
-	DeleteObject(hbm); // Delete bitmap
-	DeleteDC(hdc); // Delete DC
+			std::cout << "OpenGL resource context creation failed";
+			return NULL;
+		}
+		ctx->rc = hglrc;
+	}
+	wglMakeCurrent(ctx->dc, ctx->rc);
+	
+	return hbm;
 }
 
-int dcMain(int argc, char **argv) {
-	glewInit();
-	glVersion();
-	DCProcess();
-	return 0;
+void DCProcess() {
+	GLContext ctx;
+	glewInitContextV(&ctx);
+	struct createParams params = {0};
+	params.width = 640;
+	params.height = 480;
+	params.pixelformat = -1;
+	glewCreateContext(&ctx,&params);
+	//HBITMAP hbm = glewCreateContextDC(&ctx, 640, 480);
+
+	/*GLContext dcctx;
+	glewInitContextV(&dcctx);
+	dcctx.dc = ctx.dc;
+	HBITMAP hbm = glewCreateContextDC(&dcctx,640,480);*/
+
+	FILE * fp = NULL;
+	errno_t err = fopen_s(&fp, "./dcLog.log", "w");
+	if (fp != NULL) {
+		GLContext dcctx;
+		glewInitContextV(&dcctx);
+		dcctx.dc = wglGetCurrentDC();
+		dcctx.rc = wglGetCurrentContext();
+
+		glVersion(fp);
+		glewVisualInfoPrint(fp, &dcctx);
+		createParams params = { 0 };
+		glewInfoPrint(fp, params);
+		fclose(fp);
+	}
+	ShowWindow(ctx.wnd,SW_SHOW);
+	GdiFlush();
+
+	{
+		reshape(640, 480);
+
+		GLuint vbo = initVBO(640 * 480 * 4);
+		GLuint tex = initTexture(640,480);
+
+		cl_context context = CreateContext(CL_DEVICE_TYPE_GPU);
+		TaskArgs *args = initTask(context, vbo, 640, 480, 0);
+		int seq = 0;
+		
+		DWORD time = 0;
+		// 消息循环
+		MSG msg;
+		while(true)
+		{
+			if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+				if (msg.message == WM_QUIT)				// 收到退出消息?
+				{
+					break;
+				}
+				else if (msg.message == WM_PAINT) {
+					reshape(640, 480);
+					renderScene(args, seq++, tex, vbo);
+					SwapBuffers(wglGetCurrentDC());
+				}
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
+			else 
+			{
+				DWORD currTime = GetTickCount();
+				if (currTime - time > 1000 / 60) {
+					time = currTime;
+
+					reshape(640, 480);
+					renderScene(args,seq++,tex,vbo);
+
+					/*glFinish();
+					vboProcess(args,640,480,seq++);
+					renderTexture(tex,640,480);
+					renderVBO(vbo,640 * 480);*/
+
+					SwapBuffers(wglGetCurrentDC());
+
+					DWORD use = GetTickCount();
+					printf("%d %d\n",use - currTime, seq);
+				}
+				//break;
+			}
+		}
+
+
+		//WriteBmp(hbm,"./screen.bmp");
+		
+		if (args != NULL) {
+			uninitTask(args);
+			free(args);
+		}
+	}
+
+	HGDIOBJ r = NULL;
+	SelectObject(ctx.dc, r); // Remove bitmap from DC
+	//DeleteObject(hbm); // Delete bitmap
+
+	//glewDestroyContextV(&dcctx);
+	glewDestroyContextV(&ctx);
 }
 
-void glInitWindow() {
+int glInitWindow() {
 	//glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
 	glutInitWindowPosition(100, 100);
 	glutInitWindowSize(800, 800);
-	glutCreateWindow("测试");
+	int mode = glutGet(GLUT_INIT_DISPLAY_MODE);
+	int win = glutCreateWindow("测试");
 	glewInit();
-	glVersion();
 
-	if (glewIsSupported("GL_VERSION_2_1"))
-		printf("Ready for OpenGL 2.1\n");
-	else {
-		printf("Warning: Detected that OpenGL 2.1 not supported\n");
-	}
+	HDC dc = wglGetCurrentDC();
+	int pf = GetPixelFormat(dc);
+	PIXELFORMATDESCRIPTOR match = { 0 };
+	DescribePixelFormat(dc, pf, sizeof(PIXELFORMATDESCRIPTOR), &match);
+
+	return win;
+}
+
+int dcMain(int argc, char **argv) {
+	DCProcess();
+	return 0;
 }
 
 GLuint tex = NULL;
@@ -315,29 +445,28 @@ TaskArgs *args = NULL;
 int seq = 0;
 
 void renderScene() {
-	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	glFinish();
-	vboProcess(args, 640, 480, seq++ );
-
-	renderTexture(tex,640,480);
-	renderVBO(vbo, 640 * 480);
+	renderScene(args,seq++,tex,vbo);
 	glutSwapBuffers();
-}
-
-void reshape(int width, int height)
-{
-	glViewport(0, 0, width, height);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	gluOrtho2D(0, width, height, 0);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
 }
 
 int glMain(int argc, char **argv) {
 	glInitWindow();
+
+	GLContext ctx;
+	glewInitContextV(&ctx);
+	ctx.dc = wglGetCurrentDC();
+	ctx.rc = wglGetCurrentContext();
+
+	FILE * fp = NULL;
+	errno_t err = fopen_s(&fp,"./glLog.log","w");
+	if (fp != NULL) {
+		glVersion(fp);
+		glewVisualInfoPrint(fp,&ctx);
+		createParams params = {0};
+		glewInfoPrint(fp, params);
+		fclose(fp);
+	}
+
 	vbo = initVBO(640*480*4);
 	tex = initTexture(640,480);
 
@@ -357,7 +486,7 @@ int glMain(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-	return glMain(argc,argv);
+	//return glMain(argc,argv);
 	return dcMain(argc,argv);
 	return 0;
 }
