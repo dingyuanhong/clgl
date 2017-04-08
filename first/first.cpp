@@ -9,7 +9,7 @@
 
 #include <vector>
 
-int Process(cl_context context, cl_device_id id) {
+int Process(cl_context context, cl_device_id id,int version) {
 	cl_program program = CreateProgram(context, "./Kernal1.cl");
 	if (program == NULL) return -1;
 
@@ -34,13 +34,28 @@ int Process(cl_context context, cl_device_id id) {
 
 	cl_queue_properties properties = 0;
 	//创建执行队列
-	cl_command_queue cqueue = clCreateCommandQueueWithProperties(context, id, &properties, &err);
-	if (err == CL_INVALID_DEVICE) {
-		//http://stackoverflow.com/questions/37016928/clcreatecontext-succeeds-but-clcreatecommandqueue-fails-with-33
-
+	cl_command_queue cqueue = NULL;
+	if (version >= 200) {
+		cqueue = clCreateCommandQueueWithProperties(context, id, &properties, &err);
+		if (err == CL_INVALID_DEVICE) {
+			//http://stackoverflow.com/questions/37016928/clcreatecontext-succeeds-but-clcreatecommandqueue-fails-with-33
+			cl_command_queue_properties prop = 0;
+			cqueue = clCreateCommandQueue(context, id, prop, &err);
+		}
+	}
+	else if (version >= 110) {
 		cl_command_queue_properties prop = 0;
 		cqueue = clCreateCommandQueue(context, id, prop, &err);
 	}
+	else {
+		cl_command_queue_properties prop = 0;
+		cqueue = clCreateCommandQueue(context, id, prop, &err);
+		if (cqueue == NULL) {
+			printf("CL版本太低(%d)\n", version);
+			//return -1;
+		}
+	}
+	
 	if (cqueue != NULL) {
 		//执行核
 		cl_uint work_dims = 2;
@@ -83,7 +98,7 @@ void glInitWindow() {
 	glutInitWindowSize(640, 480);
 	glutCreateWindow("测试");
 	glewInit();
-	glVersion();
+	glVersion(stdout);
 }
 
 int main(int argc, char **argv) {
@@ -95,7 +110,7 @@ int main(int argc, char **argv) {
 
 	std::vector<cl_platform_device_info> infos;
 	for (cl_int i = 0; i < platforms.size(); i++) {
-		printf("%s %d:\n", "PLATFORM",i);
+		printf("PLATFORM %d:\n",i);
 		printPlatformInfo(stdout,platforms[i]);
 
 		std::vector<cl_device_id> deviceIDs = GetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL);
@@ -103,7 +118,7 @@ int main(int argc, char **argv) {
 
 		for (cl_int j = 0; j < deviceIDs.size(); j++) {
 			printf("ID:%d\n",j);
-			printDeviceInfo(stdout, deviceIDs[j]);
+			//printDeviceInfo(stdout, deviceIDs[j]);
 
 			cl_platform_device_info info = { 0 };
 			info.platform = platforms[i];
@@ -113,15 +128,25 @@ int main(int argc, char **argv) {
 	}
 
 	if (infos.size() > 0) {
-		int index = 2;
+		int index = 0;
 		int err = 0;
-		cl_context_properties prop[] = { CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(infos[index].platform), 0 };
-		cl_context context = clCreateContextFromType(prop, CL_DEVICE_TYPE_ALL, NULL, NULL, &err);
+		cl_device_id device = infos[index].device;
+		//printDeviceInfo(stdout, device);
+
+		int version = getDeviceCLVersion(device);
+		cl_context context = NULL;
+		if (version >= 100) {
+			cl_context_properties prop[] = { CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(infos[index].platform), 0 };
+			context = clCreateContextFromType(prop, CL_DEVICE_TYPE_ALL, NULL, NULL, &err);
+			if (context == NULL) {
+				context = clCreateContext(NULL,1,&device,NULL,NULL,&err);
+			}
+		}
 
 		if (context != NULL) {
 			printf("Context:\n");
 			printContextInfo(stdout, context);
-			err = Process(context, infos[index].device);
+			err = Process(context, device,version);
 			clReleaseContext(context);
 
 			if (err >= 0) {
@@ -129,6 +154,13 @@ int main(int argc, char **argv) {
 			}
 			else {
 				printf("执行失败.(%d)\n",err);
+			}
+		}
+		else {
+			
+			printf("创建上下文失败(%d)\n",err);
+			if (CL_DEVICE_NOT_AVAILABLE == err) {
+				printf("设备不可用\n");
 			}
 		}
 	}

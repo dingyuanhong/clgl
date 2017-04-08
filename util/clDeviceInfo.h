@@ -11,3 +11,5 @@ void printDeviceInfo(FILE * f,cl_device_id id);
 void printContextInfo(FILE * f,cl_context context);
 
 cl_device_type getDeviceType(cl_device_id deviceid);
+
+int getDeviceCLVersion(cl_device_id deviceid);

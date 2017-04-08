@@ -91,15 +91,26 @@ TaskArgs *initTask(cl_context context, GLuint vbo,int w,int h,int seq) {
 	err = clGetDeviceInfo(device,CL_DEVICE_OPENCL_C_VERSION,1024, &buffer[0], &size);
 
 	//printDeviceInfo(device);
-
-	cl_queue_properties properties = CL_QUEUE_ON_DEVICE | CL_QUEUE_PROFILING_ENABLE;
-	cl_command_queue queue = clCreateCommandQueueWithProperties(context, device, &properties, &err);
-	if (err == CL_INVALID_DEVICE) {
-		cl_command_queue_properties prop = 0;
-		queue = clCreateCommandQueue(context,device,prop,&err);
+	cl_command_queue queue = NULL;
+	int version = getDeviceCLVersion(device);
+	if (version >= 200) {
+		cl_queue_properties properties = CL_QUEUE_ON_DEVICE | CL_QUEUE_PROFILING_ENABLE;
+		queue = clCreateCommandQueueWithProperties(context, device, &properties, &err);
+		if (err == CL_INVALID_DEVICE) {
+			cl_command_queue_properties prop = 0;
+			queue = clCreateCommandQueue(context,device,prop,&err);
+		}
+		if (err != 0) {
+			printf("Error:clCreateCommandQueueWithProperties:%d\n",err);
+		}
 	}
-	if (err != 0) {
-		printf("Error:clCreateCommandQueueWithProperties:%d\n",err);
+	else if (version >= 110) {
+		cl_command_queue_properties prop = 0;
+		queue = clCreateCommandQueue(context, device, prop, &err);
+	}
+	else {
+		printf("CL°æ±¾Ì«µÍ(%d)\n", version);
+		return NULL;
 	}
 
 	TaskArgs *args = (TaskArgs*)malloc(sizeof(TaskArgs));

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "clDeviceInfo.h"
+#include <stdlib.h>
 
 const char* GetDeviceType(cl_device_type it)
 {
@@ -26,6 +27,19 @@ cl_device_type getDeviceType(cl_device_id id)
 		return type;
 	}
 	return CL_DEVICE_TYPE_ALL;
+}
+
+int getDeviceCLVersion(cl_device_id deviceid)
+{
+	char buffer[1024] = { 0 };
+	size_t size = 0;
+	int err = clGetDeviceInfo(deviceid, CL_DEVICE_OPENCL_C_VERSION, 1024, buffer, &size);
+	if (err >= 0 && size > 0) {
+		const char * c_version = buffer;
+		float version = atof(c_version + 9);
+		return version*100;
+	}
+	return 0;
 }
 
 const char* GetMemCacheType(cl_device_mem_cache_type it)
